@@ -7,7 +7,6 @@
 - 📌 **Memorize Window Positions**: Save the position and size of any open application across multiple monitors.
 - 🔄 **Auto-Start Applications**: Automatically start selected applications at their saved positions when your PC boots.
 - 🔍 **Simple and Intuitive UI**: Easily select and manage your applications with a user-friendly interface.
-- 📝 **Persistent Configuration**: Your configurations are saved in a JSON file, allowing you to maintain settings across sessions.
 - 🔧 **Installer Included**: Easy setup with the provided installer, which automatically registers the auto-start script.
 
 ## 🛠 Installation
@@ -23,10 +22,6 @@
 3. **Save Positions**: Arrange your applications on your monitors, then click `Record`.
 4. **Enjoy!**: On your next PC boot, your selected applications will start in their saved positions.
 
-## 📂 Configuration
-
-All settings are stored in the `window_positions.json` and `config.json` files in the application's directory. These files store the positions of your windows and whether auto-start is enabled.
-
 ## 🛠️ Development
 
 ### Prerequisites
@@ -40,14 +35,24 @@ All settings are stored in the `window_positions.json` and `config.json` files i
    ```bash
    git clone https://github.com/lonixchu-hk/auto-app-starter.git
    ```
-2. **Install dependencies**:
+2. **Create and activate a virtual environment**:
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   ```
+3. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Run the application**:
+4. **Build the executable**:
    ```bash
-   python record_positions.py
+   pyinstaller --noconsole --onefile --icon=app_icon.ico recorder.py
    ```
+5. **Group all parts**:
+   - Move the generated `dist\recorder.exe` into `installer\src`.
+6. **Package the application** using Inno Setup:
+   - Open `installer\innoSetup.iss` in Inno Setup.
+   - Build the installer.
 
 ## 🤝 Contributing
 
