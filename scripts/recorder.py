@@ -11,20 +11,21 @@ import time
 import appdirs
 import psutil
 import ctypes
+import win32com.client
 
 
-class WindowPositionRecorder:
+class Recorder:
     def __init__(self, root):
         self.root = root
         self.root.title("Auto App Starter")
-        self.root.geometry("600x450")
+        self.root.geometry("600x400")
 
         # File paths
-        self.config_file = self.get_data_file_path("config.json")
+        # self.config_file = self.get_data_file_path("config.json")
         self.window_positions_file = self.get_data_file_path("window_positions.json")
 
         # Load configuration settings
-        self.settings = self.load_config()
+        # self.settings = self.load_config()
 
         # Instruction Label
         self.instruction_label = tk.Label(root, text="The selected app will be auto started when PC boots.",
@@ -47,7 +48,7 @@ class WindowPositionRecorder:
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
         button_frame.grid_columnconfigure(2, weight=1)
-        button_frame.grid_rowconfigure(1, weight=1)
+        # button_frame.grid_rowconfigure(1, weight=1)
 
         # Refresh button
         self.refresh_button = ttk.Button(button_frame, text="Refresh", command=self.refresh_list)
@@ -60,20 +61,6 @@ class WindowPositionRecorder:
         # Open button
         self.open_button = ttk.Button(button_frame, text="Open", command=self.open_selected_applications)
         self.open_button.grid(row=0, column=2, padx=5, pady=5)
-
-        # Add horizontal separator line
-        self.separator = ttk.Separator(button_frame, orient='horizontal')
-        self.separator.grid(row=1, column=0, columnspan=3, sticky='ew', pady=5)
-
-        # Add checkbox and Confirm button to the second row
-        self.confirm_var = tk.BooleanVar(value=self.settings.get("confirm_start", False))
-        self.checkbox = ttk.Checkbutton(button_frame, text="Confirm starting all selected app when PC boost",
-                                        variable=self.confirm_var)
-        self.checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
-
-        self.confirm_button = ttk.Button(button_frame, text="Confirm", command=self.save_settings)
-        self.confirm_button.grid(row=2, column=2, padx=5, pady=5)
-
 
         # Label to show the result of recording
         self.result_label = ttk.Label(root, text="", font=("Arial", 10))
@@ -96,21 +83,6 @@ class WindowPositionRecorder:
     def refresh_list(self):
         self.refresh_window_list()
         self.auto_select_saved_applications()
-
-    def save_settings(self):
-        # Save the current checkbox state to the config file
-        self.settings["confirm_start"] = self.confirm_var.get()
-        with open(self.config_file, "w") as f:
-            json.dump(self.settings, f)
-        print(f"Settings saved: {self.settings}")
-
-    def load_config(self):
-        # Load the configuration settings from the JSON file
-        try:
-            with open(self.config_file, "r") as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {"confirm_start": False}
 
     def load_saved_positions(self):
         """Load previously saved window positions, creating the file if it doesn't exist."""
@@ -183,10 +155,6 @@ class WindowPositionRecorder:
         selected_indices = self.listbox.curselection()
         selected_titles = [self.listbox.get(i).replace("[Saved] ", "") for i in selected_indices]
 
-        # if not selected_titles:
-        #     messagebox.showwarning("No Selection", "Please select at least one window.")
-        #     return
-
         uwp_apps = self.get_uwp_apps()
         print(uwp_apps)
         positions = {}
@@ -257,68 +225,24 @@ class WindowPositionRecorder:
                 self.listbox.selection_set(i)
 
     def open_selected_applications(self):
-        """Open selected applications in their saved positions."""
-        selected_indices = self.listbox.curselection()
-        selected_titles = [self.listbox.get(i).replace("[Saved] ", "") for i in selected_indices]
-
         positions = self.load_saved_positions()
-
-        for title in selected_titles:
-            if title in positions:
-                pos = positions[title]
-                exe_path = pos.get('exe_path')
-                pfn = pos.get('pfn')
-
-                windows = gw.getWindowsWithTitle(title)
-                if not windows:
-                    command = f'start "shell:AppsFolder\$(Get-StartApps "{title}" | select -ExpandProperty AppId)"'
-                    print(command)
-                    subprocess.Popen(['powershell.exe', '-Command', command], shell=False)
-
-                    # if pfn:
-                    #     print(command)
-                    #     subprocess.Popen(command, shell=True)
-                    # elif exe_path:
-                    #     subprocess.Popen(exe_path)
-                    time.sleep(2)  # Wait for the application to open
-                    windows = gw.getWindowsWithTitle(title)
-                window = windows[0]
-                window.moveTo(pos['left'], pos['top'])
-                window.resizeTo(pos['width'], pos['height'])
-                # if pfn:
-                #     # Launch UWP app using PowerShell
-                #     try:
-                #         subprocess.Popen(["powershell", "start", pfn])
-                #         time.sleep(2)  # Wait for the application to open
-                #         windows = gw.getWindowsWithTitle(title)
-                #         if windows:
-                #             window = windows[0]
-                #             window.moveTo(pos['left'], pos['top'])
-                #             window.resizeTo(pos['width'], pos['height'])
-                #     except Exception as e:
-                #         messagebox.showerror("Error", f"Failed to open UWP app '{title}' with PFN '{pfn}': {e}")
-                # elif exe_path:
-                #     # Launch traditional app
-                #     try:
-                #         if not windows:
-                #             subprocess.Popen(exe_path)
-                #             time.sleep(2)  # Wait for the application to open
-                #             windows = gw.getWindowsWithTitle(title)
-                #         window = windows[0]
-                #         window.moveTo(pos['left'], pos['top'])
-                #         window.resizeTo(pos['width'], pos['height'])
-                #     except Exception as e:
-                #         messagebox.showerror("Error", f"Failed to open '{title}' from path '{exe_path}': {e}")
-                # else:
-                #     messagebox.showwarning("Path Not Found", f"No saved executable path or PFN for {title}.")
-            else:
-                messagebox.showwarning("Position Not Found", f"No saved position for {title}")
+        for appTitle, attr in positions.items():
+            windows = gw.getWindowsWithTitle(appTitle)
+            if not windows:
+                command = f'start "shell:AppsFolder\\$(Get-StartApps "{appTitle}" | select -ExpandProperty AppId)"'
+                print(command)
+                subprocess.Popen(['powershell.exe', '-Command', command], shell=False)
+                time.sleep(2)  # Wait for the application to open
+                windows = gw.getWindowsWithTitle(appTitle)
+            window = windows[0]
+            window.moveTo(attr['left'], attr['top'])
+            window.resizeTo(attr['width'], attr['height'])
 
 
 def main():
     # root = tk.Tk()
     root = ThemedTk(theme="breeze")
-    app = WindowPositionRecorder(root)
+    app = Recorder(root)
     root.mainloop()
 
 
