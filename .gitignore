@@ -162,5 +162,5 @@ cython_debug/
 #.idea/
 
 # install related files
-installer/scr/
+installer/src/
 installer/*.exe
