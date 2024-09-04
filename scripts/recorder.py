@@ -11,8 +11,7 @@ import time
 import appdirs
 import psutil
 import ctypes
-import win32com.client
-
+import screeninfo
 
 class Recorder:
     def __init__(self, root):
@@ -21,11 +20,11 @@ class Recorder:
         self.root.geometry("600x400")
 
         # File paths
-        # self.config_file = self.get_data_file_path("config.json")
         self.window_positions_file = self.get_data_file_path("window_positions.json")
+        self.previous_selections = self.load_saved_positions()
 
-        # Load configuration settings
-        # self.settings = self.load_config()
+        # Create backdrop for monitors
+        self.create_backdrop()
 
         # Instruction Label
         self.instruction_label = tk.Label(root, text="The selected app will be auto started when PC boots.",
@@ -37,7 +36,6 @@ class Recorder:
         self.listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Load previous selections and display in the listbox
-        self.previous_selections = self.load_saved_positions()
         self.refresh_window_list()
 
         # Create a frame for buttons
@@ -69,12 +67,64 @@ class Recorder:
         # Automatically select saved applications
         self.auto_select_saved_applications()
 
+    def create_backdrop(self):
+        """Creates a fullscreen backdrop across all monitors and outlines saved application positions."""
+        monitors = screeninfo.get_monitors()
+        self.backdrops = []
+
+        # Create and configure the backdrop windows
+        for monitor in monitors:
+            backdrop = tk.Toplevel(self.root)
+            backdrop.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
+            backdrop.attributes("-alpha", 0.7)
+            backdrop.overrideredirect(1)  # Removes window decorations
+            backdrop.configure(bg='black')
+            backdrop.attributes('-topmost', 1)  # Ensure the backdrop is on top
+
+            # Ensure that clicking on the backdrop does not bring it to the front
+            backdrop.bind("<Button-1>", lambda e: self.root.lift())
+
+            # Create a canvas on the backdrop for drawing outlines
+            canvas = tk.Canvas(backdrop, bg='black', highlightthickness=0)
+            canvas.pack(fill=tk.BOTH, expand=True)
+
+            # Draw outlines of saved applications
+            for title, pos in self.previous_selections.items():
+                # Check if the window is on the current monitor
+                if monitor.x <= pos['left'] < monitor.x + monitor.width and \
+                        monitor.y <= pos['top'] < monitor.y + monitor.height:
+                    # Calculate position relative to the monitor
+                    x = pos['left'] - monitor.x
+                    y = pos['top'] - monitor.y
+                    width = pos['width']
+                    height = pos['height']
+
+                    # Draw the outline as a rectangle with no fill and a blue border
+                    canvas.create_rectangle(x, y, x + width, y + height, outline='blue', width=2)
+                    print(f"Drawing outline on monitor {monitor} at position ({x}, {y}) with size ({width}x{height})")
+
+                    # Add a label with the application name inside the outline
+                    label = tk.Label(
+                        backdrop,
+                        text=title,
+                        bg='yellow',  # Set a contrasting background color
+                        fg='black',  # Set text color to black
+                        font=("Arial", 14, "bold"),  # Increase font size and make it bold
+                        padx=5,  # Add padding inside the label for better readability
+                        pady=5
+                    )
+                    label_window = canvas.create_window(x + 10, y + 10, anchor='nw', window=label)
+
+            self.backdrops.append(backdrop)
+
+        # Ensure the main window is on top of all backdrops
+        self.root.attributes('-topmost', 1)
+        # self.root.after(10, lambda: self.root.attributes('-topmost', 0))
+
     def get_data_file_path(self, filename):
         if getattr(sys, 'frozen', False):
-            # If running in a PyInstaller bundle
             user_data_dir = appdirs.user_data_dir("Auto App Starter")
         else:
-            # If running in a normal script
             user_data_dir = os.path.join(os.path.dirname(__file__), 'data')
 
         os.makedirs(user_data_dir, exist_ok=True)
