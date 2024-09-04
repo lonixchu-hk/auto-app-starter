@@ -157,22 +157,53 @@ class Recorder:
         print("Refreshing window list...")
         print(f"Saved selections: {self.previous_selections}")
 
-        # Add currently opened windows
-        for title in window_titles:
-            if title in self.previous_selections:
-                display_title = f"[Saved] {title}"
-            else:
-                display_title = title
+        # Create a dictionary to keep track of base names and their counts
+        base_name_count = {}
 
-            self.listbox.insert(tk.END, display_title)
+        # First, count instances of each base application
+        for title in window_titles:
+            base_name = self.get_base_name(title)  # Get the base name, e.g., "Edge"
+            print(base_name)
+            if base_name in base_name_count:
+                base_name_count[base_name] += 1
+            else:
+                base_name_count[base_name] = 1
+
+        display_applications = []
+
+        # Add currently opened windows with or without instance number
+        for title in window_titles:
+            base_name = self.get_base_name(title)  # Get the base name
+            # count = base_name_count[base_name]
+            # display_title = base_name if count == 1 else f"{base_name} ({count})"
+            display_title = base_name
+            if display_title in self.previous_selections:
+                display_title = f"[Saved] {display_title}"
+            display_applications.append(display_title)
 
         # Add previously saved but not currently opened windows
         for saved_title in self.previous_selections:
+            base_name = self.get_base_name(saved_title)
             if saved_title not in window_titles:
-                display_title = f"[Saved] {saved_title}"
+                # count = base_name_count.get(base_name, 0)
+                # display_title = base_name if count <= 1 else f"{base_name} ({count + 1})"
+                display_title = f"[Saved] {base_name}"
                 print(f"Adding to listbox (Saved but not open): {display_title}")
                 if display_title not in self.listbox.get(0, tk.END):
-                    self.listbox.insert(tk.END, display_title)
+                    display_applications.append(display_title)
+
+        for application_title in display_applications:
+            self.listbox.insert(tk.END, application_title)
+
+    def get_base_name(self, title):
+        """Extract base name from the title (e.g., 'Edge')."""
+        if "Edge" in title:
+            return "Edge"
+        # Add other application base names here if needed
+        # elif "Notepad" in title:
+        #     return "Notepad"
+        else:
+            return title.split('-')[0].strip()  # Default: Use the first part of the title
 
     def get_pid_by_window_title(self, window_title):
         hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
