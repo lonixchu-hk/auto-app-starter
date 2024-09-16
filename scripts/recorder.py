@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import messagebox
 from tkinter import ttk
 from ttkthemes import ThemedTk
 import pygetwindow as gw
@@ -19,13 +18,6 @@ class Recorder:
         self.root.title("Auto App Starter")
         self.root.geometry("600x400")
 
-        # File paths
-        self.window_positions_file = self.get_data_file_path("window_positions.json")
-        self.previous_selections = self.load_saved_positions()
-
-        # Create backdrop for monitors
-        self.create_backdrop()
-
         # Instruction Label
         self.instruction_label = tk.Label(root, text="The selected app will be auto started when PC boots.",
                                           font=("Arial", 10))
@@ -34,9 +26,7 @@ class Recorder:
         # Listbox to display open windows
         self.listbox = tk.Listbox(root, selectmode=tk.MULTIPLE, width=50, height=15)
         self.listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Load previous selections and display in the listbox
-        self.refresh_window_list()
+        self.listbox.bind('<<ListboxSelect>>', self.on_listbox_select)
 
         # Create a frame for buttons
         button_frame = ttk.Frame(self.root)
@@ -46,7 +36,6 @@ class Recorder:
         button_frame.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(1, weight=1)
         button_frame.grid_columnconfigure(2, weight=1)
-        # button_frame.grid_rowconfigure(1, weight=1)
 
         # Refresh button
         self.refresh_button = ttk.Button(button_frame, text="Refresh", command=self.refresh_list)
@@ -64,13 +53,34 @@ class Recorder:
         self.result_label = ttk.Label(root, text="", font=("Arial", 10))
         self.result_label.pack(pady=5)
 
+        # File paths
+        self.window_positions_file = self.get_data_file_path("window_positions.json")
+        self.previous_selections = self.load_saved_positions()
+
+        # Load previous selections and display in the listbox
+        self.refresh_window_list()
+
         # Automatically select saved applications
         self.auto_select_saved_applications()
 
+        # Create backdrop for monitors
+        self.create_backdrop()
+
     def create_backdrop(self):
         """Creates a fullscreen backdrop across all monitors and outlines saved application positions."""
+
+        # First, destroy any existing backdrops to avoid duplication
+        if hasattr(self, 'backdrops'):
+            for backdrop in self.backdrops:
+                backdrop.destroy()
+            self.backdrops.clear()  # Clear the list of backdrops
+
         monitors = screeninfo.get_monitors()
         self.backdrops = []
+
+        selected_indices = self.listbox.curselection()
+        selected_titles = [self.listbox.get(i).replace("[Saved] ", "") for i in selected_indices]
+        positions = self.get_selected_app_positions(selected_titles)
 
         # Create and configure the backdrop windows
         for monitor in monitors:
@@ -84,42 +94,61 @@ class Recorder:
             # Ensure that clicking on the backdrop does not bring it to the front
             backdrop.bind("<Button-1>", lambda e: self.root.lift())
 
+            self.root.lift()  # Bring the main app window to the top
+            self.root.attributes('-topmost', 1)  # Ensure it stays on top
+
             # Create a canvas on the backdrop for drawing outlines
             canvas = tk.Canvas(backdrop, bg='black', highlightthickness=0)
             canvas.pack(fill=tk.BOTH, expand=True)
 
-            # Draw outlines of saved applications
-            for title, pos in self.previous_selections.items():
-                # Check if the window is on the current monitor
-                if monitor.x <= pos['left'] < monitor.x + monitor.width and \
-                        monitor.y <= pos['top'] < monitor.y + monitor.height:
-                    # Calculate position relative to the monitor
-                    x = pos['left'] - monitor.x
-                    y = pos['top'] - monitor.y
-                    width = pos['width']
-                    height = pos['height']
+            # Draw outlines of selected applications
+            for title in selected_titles:
+                pos = None
+                if title in positions:
+                    pos = positions[title]
+                if title in self.previous_selections:
+                    pos = self.previous_selections[title]
 
-                    # Draw the outline as a rectangle with no fill and a blue border
-                    canvas.create_rectangle(x, y, x + width, y + height, outline='blue', width=2)
-                    print(f"Drawing outline on monitor {monitor} at position ({x}, {y}) with size ({width}x{height})")
+                if pos is not None:
+                    # Check if the window is on the current monitor
+                    if monitor.x <= pos['left'] < monitor.x + monitor.width and monitor.y <= pos['top'] < monitor.y + monitor.height:
+                        # Calculate position relative to the monitor
+                        x = pos['left'] - monitor.x
+                        y = pos['top'] - monitor.y
+                        width = pos['width']
+                        height = pos['height']
 
-                    # Add a label with the application name inside the outline
-                    label = tk.Label(
-                        backdrop,
-                        text=title,
-                        bg='yellow',  # Set a contrasting background color
-                        fg='black',  # Set text color to black
-                        font=("Arial", 14, "bold"),  # Increase font size and make it bold
-                        padx=5,  # Add padding inside the label for better readability
-                        pady=5
-                    )
-                    label_window = canvas.create_window(x + 10, y + 10, anchor='nw', window=label)
+                        # Draw the outline as a rectangle with no fill and a blue border
+                        canvas.create_rectangle(x, y, x + width, y + height, outline='blue', width=2)
+                        print(
+                            f"Drawing outline on monitor {monitor} at position ({x}, {y}) with size ({width}x{height})")
+
+                        # Add a label with the application name inside the outline
+                        label = tk.Label(
+                            backdrop,
+                            text=title,
+                            bg='yellow',  # Set a contrasting background color
+                            fg='black',  # Set text color to black
+                            font=("Arial", 14, "bold"),  # Increase font size and make it bold
+                            padx=5,  # Add padding inside the label for better readability
+                            pady=5
+                        )
+                        # Position the label within the outline
+                        canvas.create_window(x + 10, y + 10, anchor='nw', window=label)
+                        self.root.lift()  # Bring the main app window to the top
+                        self.root.attributes('-topmost', 1)  # Ensure it stays on top
 
             self.backdrops.append(backdrop)
 
         # Ensure the main window is on top of all backdrops
-        self.root.attributes('-topmost', 1)
-        # self.root.after(10, lambda: self.root.attributes('-topmost', 0))
+        self.root.after(100, lambda: self.root.lift())  # Wait 100 milliseconds, then bring the main app to the top
+        self.root.after(100, lambda: self.root.attributes('-topmost', 1))
+
+
+    def on_listbox_select(self, event):
+        print("Select App")
+        self.create_backdrop()
+
 
     def get_data_file_path(self, filename):
         if getattr(sys, 'frozen', False):
@@ -135,12 +164,9 @@ class Recorder:
         self.auto_select_saved_applications()
 
     def load_saved_positions(self):
-        """Load previously saved window positions, creating the file if it doesn't exist."""
         filename = self.window_positions_file
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
 
-        os.makedirs(os.path.dirname(filename), exist_ok=True)  # Ensure the directory exists
-
-        # If the file doesn't exist, create an empty JSON file
         if not os.path.exists(filename):
             with open(filename, 'w') as file:
                 json.dump({}, file)
@@ -212,32 +238,24 @@ class Recorder:
         return pid.value if pid.value != 0 else None
 
     def is_application_frame_host(self, path):
-        """Check if the exe path is for ApplicationFrameHost.exe."""
         return path.lower() == "c:\\windows\\system32\\applicationframehost.exe"
 
     def get_uwp_apps(self):
-        """Retrieve a dictionary of UWP apps with their PFNs."""
         uwp_apps = {}
         try:
             result = subprocess.check_output(
                 ["powershell", "Get-AppxPackage | Select-Object Name, PackageFamilyName | ConvertTo-Json"],
                 universal_newlines=True
             )
-            apps = eval(result)  # Convert JSON string to Python dictionary
+            apps = eval(result)
             for app in apps:
                 uwp_apps[app['Name']] = app['PackageFamilyName']
         except subprocess.CalledProcessError as e:
             print(f"Error retrieving UWP apps: {e}")
         return uwp_apps
 
-    def record_positions(self):
-        """Record positions of selected windows."""
-        # Save the current selection
-        selected_indices = self.listbox.curselection()
-        selected_titles = [self.listbox.get(i).replace("[Saved] ", "") for i in selected_indices]
-
+    def get_selected_app_positions(self, selected_titles):
         uwp_apps = self.get_uwp_apps()
-        print(uwp_apps)
         positions = {}
         for title in selected_titles:
             windows = gw.getWindowsWithTitle(title)
@@ -246,22 +264,20 @@ class Recorder:
                 exe_path = None
                 pfn = None
 
-                # Get PID using ctypes
                 pid = self.get_pid_by_window_title(title)
                 if pid:
                     try:
                         process = psutil.Process(pid)
-                        exe_path = process.exe()  # Get the executable path for non-UWP apps
+                        exe_path = process.exe()
 
                         if self.is_application_frame_host(exe_path):
-                            # Handle UWP app case here
                             matched_pfn = None
                             for uwp_title, uwp_pfn in uwp_apps.items():
-                                if title.lower() in uwp_title.lower():  # Case insensitive check
+                                if title.lower() in uwp_title.lower():
                                     matched_pfn = uwp_pfn
                                     break
                             pfn = matched_pfn
-                            exe_path = None  # We will use PFN instead
+                            exe_path = None
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
                         print(f"Could not get executable path for {title}: {e}")
 
@@ -273,6 +289,14 @@ class Recorder:
                     'exe_path': exe_path,
                     'pfn': pfn
                 }
+        return positions
+
+    def record_positions(self):
+
+        selected_indices = self.listbox.curselection()
+        selected_titles = [self.listbox.get(i).replace("[Saved] ", "") for i in selected_indices]
+
+        positions = self.get_selected_app_positions(selected_titles)
 
         filename = self.window_positions_file
         with open(filename, 'w') as file:
@@ -280,7 +304,6 @@ class Recorder:
 
         self.result_label.config(text="Window positions recorded successfully!")
 
-        # Reapply the previous selection
         self.listbox.selection_clear(0, tk.END)
         for i in range(self.listbox.size()):
             window_name = self.listbox.get(i)
@@ -296,9 +319,10 @@ class Recorder:
                     self.listbox.delete(i)
                     self.listbox.insert(i, window_name)
 
+        self.previous_selections = self.load_saved_positions()
+        self.create_backdrop()
 
     def auto_select_saved_applications(self):
-        """Automatically select saved applications in the listbox."""
         saved_titles = [f"[Saved] {title}" for title in self.previous_selections]
         for i in range(self.listbox.size()):
             title = self.listbox.get(i)
@@ -311,21 +335,17 @@ class Recorder:
             windows = gw.getWindowsWithTitle(appTitle)
             if not windows:
                 command = f'start "shell:AppsFolder\\$(Get-StartApps "{appTitle}" | select -ExpandProperty AppId)"'
-                print(command)
                 subprocess.Popen(['powershell.exe', '-Command', command], shell=False)
-                time.sleep(2)  # Wait for the application to open
+                time.sleep(2)
                 windows = gw.getWindowsWithTitle(appTitle)
             window = windows[0]
             window.moveTo(attr['left'], attr['top'])
             window.resizeTo(attr['width'], attr['height'])
 
-
 def main():
-    # root = tk.Tk()
     root = ThemedTk(theme="breeze")
     app = Recorder(root)
     root.mainloop()
-
 
 if __name__ == "__main__":
     main()
