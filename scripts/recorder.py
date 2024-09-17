@@ -11,9 +11,13 @@ import appdirs
 import psutil
 import ctypes
 import screeninfo
+import tkinter.messagebox as messagebox
 
 class Recorder:
     def __init__(self, root):
+
+        self.proceed = True
+
         self.root = root
         self.root.title("Auto App Starter")
         self.root.geometry("600x400")
@@ -60,11 +64,12 @@ class Recorder:
         # Load previous selections and display in the listbox
         self.refresh_window_list()
 
-        # Automatically select saved applications
-        self.auto_select_saved_applications()
+        if self.proceed:
+            # Automatically select saved applications
+            self.auto_select_saved_applications()
 
-        # Create backdrop for monitors
-        self.create_backdrop()
+            # Create backdrop for monitors
+            self.create_backdrop()
 
     def create_backdrop(self):
         """Creates a fullscreen backdrop across all monitors and outlines saved application positions."""
@@ -183,25 +188,19 @@ class Recorder:
         print("Refreshing window list...")
         print(f"Saved selections: {self.previous_selections}")
 
-        # Create a dictionary to keep track of base names and their counts
-        base_name_count = {}
-
-        # First, count instances of each base application
-        for title in window_titles:
-            base_name = self.get_base_name(title)  # Get the base name, e.g., "Edge"
-            print(base_name)
-            if base_name in base_name_count:
-                base_name_count[base_name] += 1
-            else:
-                base_name_count[base_name] = 1
+        base_names = [self.get_base_name(title) for title in window_titles]
+        merged_array = self.merge_arrays(self.previous_selections, base_names)
+        if len(merged_array) != len(set(merged_array)):
+            messagebox.showerror("Error", "Some applications are open duplicated. Please close them. \n\nActive Applications:\n" + str(merged_array))
+            self.root.destroy()
+            self.proceed = False
+            return
 
         display_applications = []
 
         # Add currently opened windows with or without instance number
         for title in window_titles:
             base_name = self.get_base_name(title)  # Get the base name
-            # count = base_name_count[base_name]
-            # display_title = base_name if count == 1 else f"{base_name} ({count})"
             display_title = base_name
             if display_title in self.previous_selections:
                 display_title = f"[Saved] {display_title}"
@@ -211,8 +210,6 @@ class Recorder:
         for saved_title in self.previous_selections:
             base_name = self.get_base_name(saved_title)
             if saved_title not in window_titles:
-                # count = base_name_count.get(base_name, 0)
-                # display_title = base_name if count <= 1 else f"{base_name} ({count + 1})"
                 display_title = f"[Saved] {base_name}"
                 print(f"Adding to listbox (Saved but not open): {display_title}")
                 if display_title not in self.listbox.get(0, tk.END):
@@ -220,6 +217,21 @@ class Recorder:
 
         for application_title in display_applications:
             self.listbox.insert(tk.END, application_title)
+
+
+    def merge_arrays(self, arr1, arr2):
+        # Create a result array with all elements from array2
+        result = arr2[:]
+
+        # Add only elements from array1 that are not already in array2
+        for elem in arr1:
+            if elem not in arr2:
+                result.append(elem)
+
+        # Sort the final merged array
+        result.sort()
+
+        return result
 
     def get_base_name(self, title):
         """Extract base name from the title (e.g., 'Edge')."""
